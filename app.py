@@ -1,22 +1,28 @@
 import streamlit as st
-import random
-from questions import tech_questions
+from dotenv import load_dotenv
+import os
+import requests
 from scripts import *
 from db_scripts import *
-#from transformers import  BlenderbotTokenizer, BlenderbotForConditionalGeneration,BlenderbotSmallForConditionalGeneration
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import  BlenderbotTokenizer, BlenderbotForConditionalGeneration,BlenderbotSmallForConditionalGeneration
+
+load_dotenv()
+
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+#API_URL = "https://api-inference.huggingface.co/models/facebook/blenderbot-3B" 
+API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
+
+HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+
 
 
 # Load model & tokenizer once
 @st.cache_resource
 def load_model():
     #model_name =  "facebook/blenderbot-3B"
-   # model_name = "facebook/blenderbot_small-90M"
-    #tokenizer = BlenderbotTokenizer.from_pretrained(model_name)
-    #model = BlenderbotSmallForConditionalGeneration.from_pretrained(model_name)
-    model_name  = "google/flan-t5-small"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    model_name = "facebook/blenderbot_small-90M"
+    tokenizer = BlenderbotTokenizer.from_pretrained(model_name)
+    model = BlenderbotSmallForConditionalGeneration.from_pretrained(model_name)
     return tokenizer, model
 
 tokenizer, model = load_model()
@@ -43,7 +49,7 @@ st.title("TalentScout Hiring Chatbot")
 user_input = st.chat_input(placeholder="Say something...")
 
 def generate_bot_reply(user_input):
-    instruction = "Instruction: respond like a helpful AI recruiter."
+    instruction = "Instruction: You are a senior technical interviewer assessing software engineering candidates.Just list the questions you want to ask the candidate. "
     context = " ".join([x[1] for x in st.session_state.history[-5:] if x[0] == "user"])
     full_prompt = f"{instruction} Context: {context} User: {user_input}"
 
@@ -53,26 +59,27 @@ def generate_bot_reply(user_input):
     return reply
 
 
-def generate_tech_questions(techs):
-    questions = []
-    for tech in techs:
-        tech_key = tech.strip().lower()
-        if tech_key in tech_questions:
-            samples = random.sample(tech_questions[tech_key], k= random.randint(1,3))
-            questions.extend(samples)
-            if len(questions) >= 5:
-                break
-    # Fill up to 5 if fewer collected
-    if len(questions) < 5:
-        all_questions = []
-        for tech in techs:
-            tech_key = tech.strip().lower()
-            if tech_key in tech_questions:
-                all_questions.extend(tech_questions[tech_key])
-        remaining = list(set(all_questions) - set(questions))
-        if remaining:
-            questions += random.sample(remaining, min(5 - len(questions), len(remaining)))
-    return questions[:5]
+def generate_questions_via_api(tech_stack, num_questions=5):
+    tech_str = ", ".join(tech_stack)
+    prompt = (
+        f"You are a technical interviewer. Generate {num_questions} interview questions for a software engineer skilled in {tech_str}. List the questions immediately."
+    )
+
+    payload = {"inputs": prompt}
+    response = requests.post(API_URL, headers=HEADERS, json=payload)
+
+    if response.status_code != 200:
+        raise Exception(f"HuggingFace API Error: {response.text}")
+
+    generated = response.json()
+    if isinstance(generated, list):
+        generated_text = generated[0]["generated_text"]
+    else:
+        generated_text = generated["generated_text"]
+
+    questions = [line.strip("-•1234567890. ") for line in generated_text.split("\n") if "?" in line]
+    print("QUESTIONS IN API: ",questions)
+    return questions[:num_questions]
     
 
 def get_answer(question):
@@ -127,13 +134,14 @@ def handle_input(user_input):
         case "info_name":
             if validate_name(user_input):
                 st.session_state.user_data['name'] = encrypt(user_input)
-                st.session_state.state = "info_email" 
+                st.session_state.state = "info_location" # change to info_email
                 return "Thanks! May I have your email address?"
             else:
                 return "Please enter a valid name."
 
         case "info_email":
             if validate_email(user_input):
+
                 st.session_state.user_data['email'] = encrypt(user_input)
                 st.session_state.state = "info_phone"
                 return "Got it. Your phone number?"
@@ -166,7 +174,7 @@ def handle_input(user_input):
         case "info_tech_stack":
             techs = [t.strip().lower() for t in user_input.split(',')]
             st.session_state.user_data['tech_stack'] = techs
-            questions = generate_tech_questions(techs)
+            questions = generate_questions_via_api(techs)
             st.session_state.questions.extend(questions)
             st.session_state.state = "awaiting_answers"
             st.session_state.awaiting_tech_answers = True
