@@ -9,23 +9,10 @@ from transformers import  BlenderbotTokenizer, BlenderbotForConditionalGeneratio
 load_dotenv()
 
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-#API_URL = "https://api-inference.huggingface.co/models/facebook/blenderbot-3B" 
 API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
 
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
-
-
-# Load model & tokenizer once
-@st.cache_resource
-def load_model():
-    #model_name =  "facebook/blenderbot-3B"
-    model_name = "facebook/blenderbot_small-90M"
-    tokenizer = BlenderbotTokenizer.from_pretrained(model_name)
-    model = BlenderbotSmallForConditionalGeneration.from_pretrained(model_name)
-    return tokenizer, model
-
-tokenizer, model = load_model()
 
 # Session state initialization
 if "state" not in st.session_state:
@@ -49,23 +36,13 @@ st.title("TalentScout Hiring Chatbot")
 user_input = st.chat_input(placeholder="Say something...")
 
 def generate_bot_reply(user_input):
-    instruction = "Instruction: You are a senior technical interviewer assessing software engineering candidates.Just list the questions you want to ask the candidate. "
+    instruction = "Instruction: You are a senior technical interviewer assessing software engineering candidates."
     context = " ".join([x[1] for x in st.session_state.history[-5:] if x[0] == "user"])
     full_prompt = f"{instruction} Context: {context} User: {user_input}"
+    return generate_reply_via_api(full_prompt)
 
-    inputs = tokenizer([full_prompt], return_tensors="pt")
-    reply_ids = model.generate(**inputs, max_length=128)
-    reply = tokenizer.batch_decode(reply_ids, skip_special_tokens=True)[0]
-    return reply
-
-
-def generate_questions_via_api(tech_stack, num_questions=5):
-    tech_str = ", ".join(tech_stack)
-    prompt = (
-        f"You are a technical interviewer. Generate {num_questions} interview questions for a software engineer skilled in {tech_str}. List the questions immediately."
-    )
-
-    payload = {"inputs": prompt}
+def generate_reply_via_api(user_input):
+    payload = {"inputs": user_input}
     response = requests.post(API_URL, headers=HEADERS, json=payload)
 
     if response.status_code != 200:
@@ -77,8 +54,15 @@ def generate_questions_via_api(tech_stack, num_questions=5):
     else:
         generated_text = generated["generated_text"]
 
+    return generated_text
+
+def generate_questions_via_api(tech_stack, num_questions=5):
+    tech_str = ", ".join(tech_stack)
+    prompt = (
+        f"You are a technical interviewer. Generate {num_questions} interview questions for a software engineer skilled in {tech_str}. List the questions immediately."
+    )
+    generated_text = generate_reply_via_api(prompt)
     questions = [line.strip("-•1234567890. ") for line in generated_text.split("\n") if "?" in line]
-    print("QUESTIONS IN API: ",questions)
     return questions[:num_questions]
     
 
