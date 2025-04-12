@@ -9,7 +9,5 @@ def validate_phone(phone):
 def validate_name(name):
     return re.match(r"[A-Za-z]{2,25}( [A-Za-z]{2,25})?", name)
 
-def flatten(xss):
-    return [x for xs in xss for x in xs]
 
 
