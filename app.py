@@ -4,13 +4,12 @@ import os
 import requests
 from scripts import *
 from db_scripts import *
-from transformers import  BlenderbotTokenizer, BlenderbotForConditionalGeneration,BlenderbotSmallForConditionalGeneration
+import uuid
 
 load_dotenv()
 
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
-
 HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 
@@ -72,11 +71,17 @@ def get_answer(question):
     st.session_state.history.append(("user", answer))
 
 def store_data():
-    db = load_db()
-    db[st.session_state.candidate_id] = st.session_state.user_data
-    db[st.session_state.candidate_id]['questions'] = st.session_state.questions
-    db[st.session_state.candidate_id]['answers'] = st.session_state.answers
-    save_db(db)
+    #db = load_db()
+    db=st.session_state.user_data
+    db['questions'] = st.session_state.questions
+    db['answers'] = st.session_state.answers
+    #db[st.session_state.candidate_id] = st.session_state.user_data
+    #db[st.session_state.candidate_id]['questions'] = st.session_state.questions
+    #db[st.session_state.candidate_id]['answers'] = st.session_state.answers
+    #save_db(db)
+    print("DB!!!",db)
+    save_candidate(db)
+
 
 def delete_data():
     db = load_db()
@@ -85,13 +90,12 @@ def delete_data():
         save_db(db)
         return "🧹 Your data has been permanently deleted."
     else:
-        return "❌ Candidate ID not found."
+        return "Candidate ID not found."
 
 def handle_input(user_input):
     if any(word in user_input.lower() for word in exit_keywords):
         st.session_state.state = 'end'
         if st.session_state.consent_given:
-            store_data()
             return "Thank you for your time.We’ve recorded your responses and our team will be in touch soon. Goodbye!"
         else:
             return "The interview has been terminated. Thank you for your time."
@@ -125,7 +129,6 @@ def handle_input(user_input):
 
         case "info_email":
             if validate_email(user_input):
-
                 st.session_state.user_data['email'] = encrypt(user_input)
                 st.session_state.state = "info_phone"
                 return "Got it. Your phone number?"
@@ -162,7 +165,6 @@ def handle_input(user_input):
             st.session_state.questions.extend(questions)
             st.session_state.state = "awaiting_answers"
             st.session_state.awaiting_tech_answers = True
-            store_data()
             return f"Your profile has been saved with the id {st.session_state.candidate_id}. Please answer the following questions:\n" +st.session_state.questions[st.session_state.question_number]
              
         case "awaiting_answers":
@@ -171,6 +173,7 @@ def handle_input(user_input):
             if st.session_state.question_number < len(st.session_state.questions):
                 return st.session_state.questions[st.session_state.question_number]
             st.session_state.state = "chatting"
+            store_data()
             return "Thanks for your answers!Type 'bye' to end the interview."
 
         case "chatting":
