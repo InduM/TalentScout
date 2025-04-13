@@ -54,6 +54,9 @@ streamlit run app.py
 | Security       | Fernet encryption for PII        |
 
 ## 🔐 Security & GDPR
--All Personally Identifiable Information (PII) like names and contacts are encrypted at rest using cryptography.Fernet.
--Data is not shared with 3rd parties beyond model inference (via Hugging Face API).
--Optionally support anonymization and delete-on-request via admin panel or CLI tool (coming soon).
+- All Personally Identifiable Information (PII) like names and contacts are encrypted at rest using cryptography.Fernet.
+- Data is not shared with 3rd parties beyond model inference (via Hugging Face API).
+- Optionally support anonymization and delete-on-request via admin panel or CLI tool (coming soon).
+
+## Deployment
+The app has been deployed using [streamlit](https://indum-talentscout-app-hgahsd.streamlit.app/)
